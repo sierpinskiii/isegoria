@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opinion Collection Form</title>
+</head>
+<body>
+    <h1>Opinion Collection Form</h1>
+    <form id="opinionForm">
+        <label for="opinion">Your Opinion:</label><br>
+        <textarea id="opinion" name="opinion" rows="4" cols="50" required></textarea><br>
+        <button type="submit">Submit</button>
+    </form>
+    <h2>Group Average Opinion</h2>
+    <p id="averageOpinion"></p>
+    <p id="message"></p>
+
+    <script>
+        document.getElementById('opinionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const opinion = document.getElementById('opinion').value;
+            document.getElementById('message').innerText = "Sending...";
+
+            try {
+                const response = await fetch('/api/opinions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ opinion }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                document.getElementById('averageOpinion').innerText = data.averageOpinion;
+                document.getElementById('message').innerText = "Opinion sent successfully.";
+            } catch (error) {
+                document.getElementById('message').innerText = `Failed to send: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
