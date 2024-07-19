@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const OpenAI = require('openai');
+const cron = require('node-cron');
 require('dotenv').config();
 
 const app = express();
@@ -18,6 +19,7 @@ const openai = new OpenAI({
 
 let opinions = [];
 
+// Function to get average opinion
 async function getAverageOpinion(opinions) {
     const prompt = `Based on the following opinions, please summarize the average opinion of this group:\n\n${opinions.join("\n")}`;
     console.log("Generated Prompt: ", prompt);
@@ -27,7 +29,7 @@ async function getAverageOpinion(opinions) {
             messages: [{ role: "user", content: prompt }],
             max_tokens: 150,
         });
-        console.log("OpenAI Response: ", response); // 追加: レスポンス全体をログに出力
+        console.log("OpenAI Response: ", response);
         if (response && response.choices && response.choices.length > 0) {
             return response.choices[0].message.content.trim();
         } else {
@@ -39,16 +41,26 @@ async function getAverageOpinion(opinions) {
     }
 }
 
+// Endpoint to receive opinions
 app.post('/api/opinions', async (req, res) => {
     const opinion = req.body.opinion;
     opinions.push(opinion);
+    res.json({ message: "Opinion received" });
+});
 
-    try {
-        const averageOpinion = await getAverageOpinion(opinions);
-        res.json({ averageOpinion });
-    } catch (error) {
-        console.error('Error occurred:', error.response ? error.response.data : error.message);
-        res.status(500).send(`Error occurred: ${error.response ? error.response.data : error.message}`);
+// Schedule task to summarize opinions every Sunday at midnight
+cron.schedule('0 0 * * 0', async () => {
+    if (opinions.length > 0) {
+        try {
+            const averageOpinion = await getAverageOpinion(opinions);
+            console.log(`Weekly Summary: ${averageOpinion}`);
+            // Reset opinions array after summarizing
+            opinions = [];
+        } catch (error) {
+            console.error('Error occurred during weekly summary:', error);
+        }
+    } else {
+        console.log('No opinions to summarize this week.');
     }
 });
 
