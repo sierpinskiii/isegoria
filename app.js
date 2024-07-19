@@ -13,12 +13,35 @@ app.use(cors());
 app.use(express.static('public'));
 
 const opinionsFilePath = './opinions.json';
-const deadline = new Date('2024-07-30T23:59:00'); // 提出期限の設定
+const configFilePath = './config.json'; // 設定ファイルのパス
+const classesFilePath = './classes.json'; // 授業リストのパス
 
 // OpenAI API key setup
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Function to load configuration
+async function loadConfig() {
+    try {
+        const data = await fs.readFile(configFilePath, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        console.error('Error loading config:', error);
+        throw error;
+    }
+}
+
+// Function to load classes from file
+async function loadClasses() {
+    try {
+        const data = await fs.readFile(classesFilePath, 'utf8');
+        return JSON.parse(data).classes;
+    } catch (error) {
+        console.error('Error loading classes:', error);
+        throw error;
+    }
+}
 
 // Function to load opinions from file
 async function loadOpinions() {
@@ -61,6 +84,18 @@ async function getAverageOpinion(opinions) {
     }
 }
 
+// Middleware to load config
+let deadline;
+app.use(async (req, res, next) => {
+    try {
+        const config = await loadConfig();
+        deadline = new Date(config.deadline);
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Endpoint to receive opinions
 app.post('/api/opinions', async (req, res) => {
     const opinion = req.body.opinion;
@@ -79,6 +114,16 @@ app.post('/api/opinions', async (req, res) => {
 // Endpoint to get the deadline
 app.get('/api/deadline', (req, res) => {
     res.json({ deadline: deadline.toISOString() });
+});
+
+// Endpoint to get the classes
+app.get('/api/classes', async (req, res) => {
+    try {
+        const classes = await loadClasses();
+        res.json({ classes });
+    } catch (error) {
+        res.status(500).json({ message: 'Error loading classes' });
+    }
 });
 
 app.listen(port, () => {

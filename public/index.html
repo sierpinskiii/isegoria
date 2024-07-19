@@ -9,10 +9,14 @@
 <body>
     <div class="container">
         <h1>Opinion Collection Form</h1>
+        <label for="classSelect">Select a class:</label>
+        <select id="classSelect">
+            <option value="">--Select a class--</option>
+        </select>
         <form id="opinionForm" style="display:none;">
-            <label for="opinion">Your Opinion:</label>
-            <textarea id="opinion" name="opinion" rows="4" cols="50" required></textarea>
-            <button type="submit">Submit</button>
+            <label for="opinion" id="opinionLabel" style="display:none;">Your Opinion:</label>
+            <textarea id="opinion" name="opinion" rows="4" cols="50" required style="display:none;"></textarea>
+            <button type="submit" style="display:none;">Submit</button>
         </form>
         <h2>Group Average Opinion</h2>
         <p id="averageOpinion"></p>
@@ -29,18 +33,48 @@
 
             const deadlineMessage = document.getElementById('deadlineMessage');
             const opinionForm = document.getElementById('opinionForm');
+            const opinionLabel = document.getElementById('opinionLabel');
+            const opinionTextarea = document.getElementById('opinion');
+            const submitButton = document.querySelector('#opinionForm button');
+            const classSelect = document.getElementById('classSelect');
+
+            // Load classes
+            const classesResponse = await fetch('/api/classes');
+            const classesData = await classesResponse.json();
+            classesData.classes.forEach(cls => {
+                const option = document.createElement('option');
+                option.value = cls;
+                option.textContent = cls;
+                classSelect.appendChild(option);
+            });
+
             if (now > deadline) {
                 deadlineMessage.innerText = "The submission period has ended.";
                 deadlineMessage.classList.add('deadline-ended');
             } else {
                 deadlineMessage.innerText = `Please submit your opinion by: ${deadline.toLocaleString()}`;
-                opinionForm.style.display = 'block';
             }
+
+            // Show form when a class is selected
+            classSelect.addEventListener('change', () => {
+                if (classSelect.value) {
+                    opinionForm.style.display = 'block';
+                    opinionLabel.style.display = 'block';
+                    opinionTextarea.style.display = 'block';
+                    submitButton.style.display = 'block';
+                } else {
+                    opinionForm.style.display = 'none';
+                    opinionLabel.style.display = 'none';
+                    opinionTextarea.style.display = 'none';
+                    submitButton.style.display = 'none';
+                }
+            });
         });
 
         document.getElementById('opinionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const opinion = document.getElementById('opinion').value;
+            const selectedClass = document.getElementById('classSelect').value;
             document.getElementById('message').innerText = "Sending...";
 
             try {
@@ -49,7 +83,7 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ opinion }),
+                    body: JSON.stringify({ opinion: `${selectedClass}: ${opinion}` }),
                 });
 
                 if (!response.ok) {
