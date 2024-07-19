@@ -4,17 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Opinion Collection Form</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Opinion Collection Form</h1>
-    <form id="opinionForm">
-        <label for="opinion">Your Opinion:</label><br>
-        <textarea id="opinion" name="opinion" rows="4" cols="50" required></textarea><br>
-        <button type="submit">Submit</button>
-    </form>
-    <h2>Group Average Opinion</h2>
-    <p id="averageOpinion"></p>
-    <p id="message"></p>
+    <div class="container">
+        <h1>Opinion Collection Form</h1>
+        <form id="opinionForm">
+            <label for="opinion">Your Opinion:</label>
+            <textarea id="opinion" name="opinion" rows="4" cols="50" required></textarea>
+            <button type="submit">Submit</button>
+        </form>
+        <h2>Group Average Opinion</h2>
+        <p id="averageOpinion"></p>
+        <p id="message"></p>
+    </div>
 
     <script>
         document.getElementById('opinionForm').addEventListener('submit', async (e) => {
