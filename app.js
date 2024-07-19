@@ -2,7 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const OpenAI = require('openai');
-const cron = require('node-cron');
+const fs = require('fs-extra');
 require('dotenv').config();
 
 const app = express();
@@ -12,12 +12,32 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static('public'));
 
+const opinionsFilePath = './opinions.json';
+const deadline = new Date('2023-07-30T23:59:00'); // 提出期限の設定
+
 // OpenAI API key setup
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-let opinions = [];
+// Function to load opinions from file
+async function loadOpinions() {
+    try {
+        const data = await fs.readFile(opinionsFilePath, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return []; // File doesn't exist yet
+        } else {
+            throw error;
+        }
+    }
+}
+
+// Function to save opinions to file
+async function saveOpinions(opinions) {
+    await fs.writeFile(opinionsFilePath, JSON.stringify(opinions, null, 2));
+}
 
 // Function to get average opinion
 async function getAverageOpinion(opinions) {
@@ -44,24 +64,21 @@ async function getAverageOpinion(opinions) {
 // Endpoint to receive opinions
 app.post('/api/opinions', async (req, res) => {
     const opinion = req.body.opinion;
+    const now = new Date();
+
+    if (now > deadline) {
+        return res.status(403).json({ message: "The submission period has ended." });
+    }
+
+    let opinions = await loadOpinions();
     opinions.push(opinion);
+    await saveOpinions(opinions);
     res.json({ message: "Opinion received" });
 });
 
-// Schedule task to summarize opinions every Sunday at midnight
-cron.schedule('0 0 * * 0', async () => {
-    if (opinions.length > 0) {
-        try {
-            const averageOpinion = await getAverageOpinion(opinions);
-            console.log(`Weekly Summary: ${averageOpinion}`);
-            // Reset opinions array after summarizing
-            opinions = [];
-        } catch (error) {
-            console.error('Error occurred during weekly summary:', error);
-        }
-    } else {
-        console.log('No opinions to summarize this week.');
-    }
+// Endpoint to get the deadline
+app.get('/api/deadline', (req, res) => {
+    res.json({ deadline: deadline.toISOString() });
 });
 
 app.listen(port, () => {
