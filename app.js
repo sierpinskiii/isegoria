@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.static('public'));
 
 const opinionsFilePath = './opinions.json';
-const deadline = new Date('2023-07-30T23:59:00'); // 提出期限の設定
+const deadline = new Date('2024-07-30T23:59:00'); // 提出期限の設定
 
 // OpenAI API key setup
 const openai = new OpenAI({
