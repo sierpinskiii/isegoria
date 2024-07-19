@@ -35,9 +35,8 @@
                     throw new Error(`Server error: ${response.statusText}`);
                 }
 
-                const data = await response.json();
-                document.getElementById('averageOpinion').innerText = data.averageOpinion;
-                document.getElementById('message').innerText = "Opinion sent successfully.";
+                document.getElementById('message').innerText = "Opinion received successfully.";
+                document.getElementById('opinion').value = ''; // Clear the textarea
             } catch (error) {
                 document.getElementById('message').innerText = `Failed to send: ${error.message}`;
             }
