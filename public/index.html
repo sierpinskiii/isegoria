@@ -9,8 +9,15 @@
 <body>
     <div class="container">
         <h1>Opinion Collection Form</h1>
-        <label for="classSelect">Select a class:</label>
-        <select id="classSelect">
+        <div id="authSection">
+            <label for="userId">User ID:</label>
+            <input type="text" id="userId" required>
+            <button id="registerButton">Register</button>
+            <button id="loginButton">Login</button>
+            <p id="authMessage"></p>
+        </div>
+        <label for="classSelect" style="display:none;">Select a class:</label>
+        <select id="classSelect" style="display:none;">
             <option value="">--Select a class--</option>
         </select>
         <form id="opinionForm" style="display:none;">
@@ -30,14 +37,19 @@
             const deadlineData = await deadlineResponse.json();
             const deadline = new Date(deadlineData.deadline);
             const now = new Date();
-
+    
             const deadlineMessage = document.getElementById('deadlineMessage');
+            const authSection = document.getElementById('authSection');
+            const userIdInput = document.getElementById('userId');
+            const registerButton = document.getElementById('registerButton');
+            const loginButton = document.getElementById('loginButton');
+            const authMessage = document.getElementById('authMessage');
             const opinionForm = document.getElementById('opinionForm');
             const opinionLabel = document.getElementById('opinionLabel');
             const opinionTextarea = document.getElementById('opinion');
             const submitButton = document.querySelector('#opinionForm button');
             const classSelect = document.getElementById('classSelect');
-
+    
             // Load classes
             const classesResponse = await fetch('/api/classes');
             const classesData = await classesResponse.json();
@@ -47,14 +59,125 @@
                 option.textContent = cls;
                 classSelect.appendChild(option);
             });
-
+    
             if (now > deadline) {
                 deadlineMessage.innerText = "The submission period has ended.";
                 deadlineMessage.classList.add('deadline-ended');
             } else {
                 deadlineMessage.innerText = `Please submit your opinion by: ${deadline.toLocaleString()}`;
             }
-
+    
+            function base64ToArrayBuffer(base64) {
+                const binaryString = window.atob(base64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            }
+    
+            function arrayBufferToBase64(buffer) {
+                let binary = '';
+                const bytes = new Uint8Array(buffer);
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return window.btoa(binary);
+            }
+    
+            function stringToArrayBuffer(str) {
+                const buf = new ArrayBuffer(str.length);
+                const bufView = new Uint8Array(buf);
+                for (let i = 0; i < str.length; i++) {
+                    bufView[i] = str.charCodeAt(i);
+                }
+                return buf;
+            }
+    
+            async function register() {
+                const userId = userIdInput.value;
+                const registerRequest = await fetch('/api/registerRequest', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ userId }),
+                });
+    
+                const options = await registerRequest.json();
+                options.challenge = base64ToArrayBuffer(options.challenge);
+                options.user.id = stringToArrayBuffer(options.user.id);
+    
+                const credential = await navigator.credentials.create({ publicKey: options });
+    
+                const response = await fetch('/api/registerResponse', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId,
+                        attestationObject: arrayBufferToBase64(credential.response.attestationObject),
+                        clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
+                        rawId: arrayBufferToBase64(credential.rawId),
+                    }),
+                });
+    
+                const result = await response.json();
+                if (result.success) {
+                    authMessage.innerText = "Registration successful. You can now log in.";
+                } else {
+                    authMessage.innerText = "Registration failed.";
+                }
+            }
+    
+            async function login() {
+                const userId = userIdInput.value;
+                const loginRequest = await fetch('/api/loginRequest', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ userId }),
+                });
+    
+                const options = await loginRequest.json();
+                options.challenge = base64ToArrayBuffer(options.challenge);
+                options.allowCredentials.forEach(cred => {
+                    cred.id = base64ToArrayBuffer(cred.id);
+                });
+    
+                const assertion = await navigator.credentials.get({ publicKey: options });
+    
+                const response = await fetch('/api/loginResponse', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId,
+                        authenticatorData: arrayBufferToBase64(assertion.response.authenticatorData),
+                        clientDataJSON: arrayBufferToBase64(assertion.response.clientDataJSON),
+                        signature: arrayBufferToBase64(assertion.response.signature),
+                        rawId: arrayBufferToBase64(assertion.rawId),
+                    }),
+                });
+    
+                const result = await response.json();
+                if (result.success) {
+                    authMessage.innerText = "Login successful.";
+                    authSection.style.display = 'none';
+                    document.querySelector('label[for="classSelect"]').style.display = 'block';
+                    classSelect.style.display = 'block';
+                } else {
+                    authMessage.innerText = "Login failed.";
+                }
+            }
+    
+            registerButton.addEventListener('click', register);
+            loginButton.addEventListener('click', login);
+    
             // Show form when a class is selected
             classSelect.addEventListener('change', () => {
                 if (classSelect.value) {
@@ -70,13 +193,13 @@
                 }
             });
         });
-
+    
         document.getElementById('opinionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const opinion = document.getElementById('opinion').value;
             const selectedClass = document.getElementById('classSelect').value;
             document.getElementById('message').innerText = "Sending...";
-
+    
             try {
                 const response = await fetch('/api/opinions', {
                     method: 'POST',
@@ -85,11 +208,11 @@
                     },
                     body: JSON.stringify({ opinion: `${selectedClass}: ${opinion}` }),
                 });
-
+    
                 if (!response.ok) {
                     throw new Error(`Server error: ${response.statusText}`);
                 }
-
+    
                 const data = await response.json();
                 if (data.message === "The submission period has ended.") {
                     document.getElementById('message').innerText = data.message;
