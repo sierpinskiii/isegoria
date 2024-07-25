@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const OpenAI = require('openai');
 const fs = require('fs-extra');
+const { Fido2Lib } = require('fido2-lib');
 require('dotenv').config();
 
 const app = express();
@@ -15,6 +16,21 @@ app.use(express.static('public'));
 const opinionsFilePath = './opinions.json';
 const configFilePath = './config.json'; // 設定ファイルのパス
 const classesFilePath = './classes.json'; // 授業リストのパス
+
+// FIDO2 Library setup
+const fido2 = new Fido2Lib({
+    timeout: 60000,
+    rpId: "localhost",
+    rpName: "Example App",
+    rpIcon: "https://example.com/icon.png",
+    challengeSize: 32,
+    attestation: "none",
+    authenticatorRequireResidentKey: false,
+    authenticatorUserVerification: "preferred",
+});
+
+// In-memory user database
+const users = new Map();
 
 // OpenAI API key setup
 const openai = new OpenAI({
@@ -126,6 +142,121 @@ app.get('/api/classes', async (req, res) => {
     }
 });
 
+// FIDO2 Registration
+app.post('/api/registerRequest', async (req, res) => {
+    const userId = req.body.userId;
+    const user = {
+        id: Buffer.from(userId, 'utf8'), // Convert userId to Buffer
+        name: userId,
+        displayName: userId
+    };
+    const challengeMakeCred = await fido2.attestationOptions();
+
+    // Set the user for this request
+    challengeMakeCred.user = user;
+    challengeMakeCred.challenge = Buffer.from(challengeMakeCred.challenge).toString('base64'); // Base64 encode the challenge
+    users.set(userId, { ...user, challenge: challengeMakeCred.challenge });
+
+    res.json(challengeMakeCred);
+});
+
+app.post('/api/registerResponse', async (req, res) => {
+    const userId = req.body.userId;
+    const attestationObject = req.body.attestationObject;
+    const clientDataJSON = req.body.clientDataJSON;
+    const rawId = Buffer.from(req.body.rawId, 'base64');  // Directly use Buffer for rawId
+    const challenge = users.get(userId).challenge;
+
+    const attestationExpectations = {
+        challenge: challenge,
+        origin: "http://localhost:3000",
+        factor: "either"
+    };
+
+    try {
+        // Ensure attestationObject and clientDataJSON are base64 strings
+        if (typeof attestationObject !== 'string' || typeof clientDataJSON !== 'string') {
+            throw new TypeError('attestationObject and clientDataJSON must be base64 encoded strings');
+        }
+
+        // Log data for debugging
+        console.log("Attestation Object:", attestationObject);
+        console.log("Client Data JSON:", clientDataJSON);
+        console.log("Raw ID:", rawId);
+        console.log("Challenge:", challenge);
+
+        const regResult = await fido2.attestationResult({
+            id: rawId.buffer,
+            rawId: rawId.buffer,
+            response: {
+                attestationObject: Buffer.from(attestationObject, 'base64').buffer,
+                clientDataJSON: Buffer.from(clientDataJSON, 'base64').buffer
+            }
+        }, attestationExpectations);
+
+        users.set(userId, { ...users.get(userId), credentials: regResult.authnrData });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("FIDO2 Attestation Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// FIDO2 Authentication
+app.post('/api/loginRequest', async (req, res) => {
+    const userId = req.body.userId;
+    const user = users.get(userId);
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    const challenge = await fido2.assertionOptions();
+    challenge.allowCredentials = [{
+        type: "public-key",
+        id: user.credentials.credId
+    }];
+    challenge.challenge = Buffer.from(challenge.challenge).toString('base64'); // Base64 encode the challenge
+
+    user.challenge = challenge.challenge;
+    users.set(userId, user);
+
+    res.json(challenge);
+});
+
+app.post('/api/loginResponse', async (req, res) => {
+    const userId = req.body.userId;
+    const authenticatorData = req.body.authenticatorData;
+    const clientDataJSON = req.body.clientDataJSON;
+    const signature = req.body.signature;
+    const rawId = Buffer.from(req.body.rawId, 'base64'); // Directly use Buffer for rawId
+    const challenge = users.get(userId).challenge;
+    const user = users.get(userId);
+
+    const assertionExpectations = {
+        challenge: challenge,
+        origin: "http://localhost:3000",
+        factor: "either",
+        publicKey: user.credentials.publicKey
+    };
+
+    try {
+        const authResult = await fido2.assertionResult({
+            id: rawId.buffer,
+            rawId: rawId.buffer,
+            response: {
+                authenticatorData: Buffer.from(authenticatorData, 'base64').buffer,
+                clientDataJSON: Buffer.from(clientDataJSON, 'base64').buffer,
+                signature: Buffer.from(signature, 'base64').buffer
+            }
+        }, assertionExpectations);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("FIDO2 Assertion Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
 });
