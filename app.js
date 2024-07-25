@@ -146,7 +146,7 @@ app.get('/api/classes', async (req, res) => {
 app.post('/api/registerRequest', async (req, res) => {
     const userId = req.body.userId;
     const user = {
-        id: Buffer.from(userId, 'utf8'), // Convert userId to Buffer
+        id: Buffer.from(userId).toString("base64"), // Convert userId to Buffer
         name: userId,
         displayName: userId
     };
@@ -160,11 +160,20 @@ app.post('/api/registerRequest', async (req, res) => {
     res.json(challengeMakeCred);
 });
 
+function base64ToArrayBuffer(base64) {
+    var binaryString = atob(base64);
+    var bytes = new Uint8Array(binaryString.length);
+    for (var i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
 app.post('/api/registerResponse', async (req, res) => {
     const userId = req.body.userId;
     const attestationObject = req.body.attestationObject;
     const clientDataJSON = req.body.clientDataJSON;
-    const rawId = Buffer.from(req.body.rawId, 'base64');  // Directly use Buffer for rawId
+    const rawId = req.body.rawId;
     const challenge = users.get(userId).challenge;
 
     const attestationExpectations = {
@@ -179,20 +188,15 @@ app.post('/api/registerResponse', async (req, res) => {
             throw new TypeError('attestationObject and clientDataJSON must be base64 encoded strings');
         }
 
-        // Log data for debugging
-        console.log("Attestation Object:", attestationObject);
-        console.log("Client Data JSON:", clientDataJSON);
-        console.log("Raw ID:", rawId);
-        console.log("Challenge:", challenge);
-
-        const regResult = await fido2.attestationResult({
-            id: rawId.buffer,
-            rawId: rawId.buffer,
+        const authnResponse = {
+            id: base64ToArrayBuffer(rawId),
+            rawId: base64ToArrayBuffer(rawId),
             response: {
-                attestationObject: Buffer.from(attestationObject, 'base64').buffer,
-                clientDataJSON: Buffer.from(clientDataJSON, 'base64').buffer
+                attestationObject: attestationObject,
+                clientDataJSON: clientDataJSON
             }
-        }, attestationExpectations);
+        };
+        const regResult = await fido2.attestationResult(authnResponse, attestationExpectations);
 
         users.set(userId, { ...users.get(userId), credentials: regResult.authnrData });
 
@@ -214,7 +218,7 @@ app.post('/api/loginRequest', async (req, res) => {
     const challenge = await fido2.assertionOptions();
     challenge.allowCredentials = [{
         type: "public-key",
-        id: user.credentials.credId
+        id: Buffer.from(user.credentials.get("credId")).toString("base64")
     }];
     challenge.challenge = Buffer.from(challenge.challenge).toString('base64'); // Base64 encode the challenge
 
@@ -229,7 +233,7 @@ app.post('/api/loginResponse', async (req, res) => {
     const authenticatorData = req.body.authenticatorData;
     const clientDataJSON = req.body.clientDataJSON;
     const signature = req.body.signature;
-    const rawId = Buffer.from(req.body.rawId, 'base64'); // Directly use Buffer for rawId
+    const rawId = req.body.rawId; // Directly use Buffer for rawId
     const challenge = users.get(userId).challenge;
     const user = users.get(userId);
 
@@ -237,17 +241,20 @@ app.post('/api/loginResponse', async (req, res) => {
         challenge: challenge,
         origin: "http://localhost:3000",
         factor: "either",
-        publicKey: user.credentials.publicKey
+        publicKey: user.credentials.get("credentialPublicKeyPem"),
+        prevCounter: 0,
+        userHandle: Buffer.from(userId).toString("base64"),
     };
 
     try {
         const authResult = await fido2.assertionResult({
-            id: rawId.buffer,
-            rawId: rawId.buffer,
+            id: base64ToArrayBuffer(rawId),
+            rawId: base64ToArrayBuffer(rawId),
             response: {
-                authenticatorData: Buffer.from(authenticatorData, 'base64').buffer,
-                clientDataJSON: Buffer.from(clientDataJSON, 'base64').buffer,
-                signature: Buffer.from(signature, 'base64').buffer
+                authenticatorData: base64ToArrayBuffer(authenticatorData),
+                clientDataJSON: base64ToArrayBuffer(clientDataJSON),
+                signature: base64ToArrayBuffer(signature),
+                userHandle: base64ToArrayBuffer(Buffer.from(userId).toString("base64")),
             }
         }, assertionExpectations);
 

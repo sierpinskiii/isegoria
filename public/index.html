@@ -107,10 +107,10 @@
     
                 const options = await registerRequest.json();
                 options.challenge = base64ToArrayBuffer(options.challenge);
-                options.user.id = stringToArrayBuffer(options.user.id);
+                options.user.id = base64ToArrayBuffer(options.user.id);
     
                 const credential = await navigator.credentials.create({ publicKey: options });
-    
+
                 const response = await fetch('/api/registerResponse', {
                     method: 'POST',
                     headers: {
