@@ -82,3 +82,15 @@ button:hover {
     color: red;
     font-weight: bold;
 }
+
+.button-group {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.button-group button {
+    display: inline-block;
+    margin: 0;
+}
