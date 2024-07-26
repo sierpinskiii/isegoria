@@ -16,6 +16,7 @@ app.use(express.static('public'));
 
 const opinionsFilePath = './opinions.json';
 const configFilePath = './config.json'; // 設定ファイルのパス
+const groupFilePath = './group.json'; // 設定ファイルのパス
 const classesFilePath = './classes.json'; // 授業リストのパス
 
 // FIDO2 Library setup
@@ -48,6 +49,25 @@ async function loadConfig() {
         throw error;
     }
 }
+
+// Function to load group from file
+async function loadGroup() {
+    try {
+        const data = await fs.readFile(groupFilePath, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return []; // File doesn't exist yet
+        } else {
+            throw error;
+        }
+    }
+}
+
+async function saveGroup(group) {
+    await fs.writeFile(groupFilePath, JSON.stringify(group, null, 2));
+}
+
 
 // Function to load classes from file
 async function loadClasses() {
