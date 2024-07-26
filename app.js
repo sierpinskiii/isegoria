@@ -1,3 +1,4 @@
+var lrs = require("lrs");
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -115,7 +116,15 @@ app.use(async (req, res, next) => {
 // Endpoint to receive opinions
 app.post('/api/opinions', async (req, res) => {
     const opinion = req.body.opinion;
+    const signature = req.body.signature;
     const now = new Date();
+
+    let group = await loadPubKeys();
+    group = group.map((m) => m.publicKey);
+
+    if (lrs.verify(group, signature, opinion) == false;) {
+        return res.status(403).json({ message: "Wrong signature." });
+    }
 
     if (now > deadline) {
         return res.status(403).json({ message: "The submission period has ended." });
@@ -264,6 +273,25 @@ app.post('/api/loginResponse', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// Endpoint to Issue A Signing Key
+app.post('/api/sigkey/issue', async (req, res) => {
+    // Server should have organization ids and pws
+    // hashed in advance in their DB
+    const ORG_ID = req.body.id;
+    const ORG_PW = req.body.pw;
+    const now = new Date();
+
+    // assert here to check if id/pw exists
+
+    var alice = lrs.gen();
+
+    let group = await loadGroup();
+    group.push(alice);
+    await saveGroup(group);
+    res.json({ pubkey: alice.publicKey });
+});
+
 app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
 });
