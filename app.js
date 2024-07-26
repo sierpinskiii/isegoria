@@ -1,4 +1,4 @@
-var lrs = require("lrs");
+const lrs = require("lrs");
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -122,7 +122,7 @@ app.post('/api/opinions', async (req, res) => {
     let group = await loadPubKeys();
     group = group.map((m) => m.publicKey);
 
-    if (lrs.verify(group, signature, opinion) == false;) {
+    if (!lrs.verify(group, signature, opinion)) {
         return res.status(403).json({ message: "Wrong signature." });
     }
 
